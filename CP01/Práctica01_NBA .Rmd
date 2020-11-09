@@ -1,0 +1,383 @@
+---
+title: "Práctica01_NBA"
+author: "Beatriz Cárdaba"
+date: "28/10/2020"
+output:
+  html_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+# Modelo predictivo de los Salarios NBA
+
+### Modelo a partir de las relaciones entre el salario y las caraterísticas del jugador.
+
+Para la creación del modelo disponemos de la base de datos nba_data, importamos los datos en el formato deseado e importamos las liberías que se vayan a utilizar:
+
+
+```{r import_data,echo = FALSE}
+library(readr)
+library(dplyr)
+nba_data = read.csv("./nba.csv") # ruta relativa de los datos importados
+View(nba_data)
+```
+
+
+### Características del Dataset
+Es importante conocer las dimensiones de las caraterísticas y variables de los datos disponibles importados.
+
+```{r eda,echo = FALSE}
+str(nba_data) # visualizamos el tipo de variables de la base de datos, el número de observaciones y de variables
+```
+Contamos con 48 variables de un total de 485 observaciones. Las variables son de tipo character, int y num
+
+
+Se define el significado de cada una de las variables del modelo
+
+### Diccionario de datos:
+- Player: nombre del jugados
+- Salary: salario del jugadore en $
+- NBA_Country: país de nacionalidad del jugador
+- NBA_DraftNumber: posición en el Draft del jugador
+- Age: edad del jugador
+- Tm: equipo del jugador
+- G: partidos que ha disputado el jugador
+- MP: minutos que ha jugado el jugador
+- PER: valoración del jugador por minuto, estandarizado sabiendo que la media de la liga es 15.
+- TS.: porcentaje total de acierto en tiro. Tiendo en cuenta tiros de 2, de 3 y tiros libres.
+- X3PAr: porcentaje en tiros de 3
+- FTr: porcentaje en tiros libres
+- ORB.: porcentaje de los rebotes ofensivos que ha cogido del total que se han producido mientras estaba en campo
+- DRB.: porcentaje de los rebotes defensivos que ha cogido del total que se han producido mientras estaba en campo 
+- TRB.: porcentaje de los rebotes totales que ha cogido del total que se han producido mientras estaba en campo
+- AST.: porcentaje de las asistencias totales que ha realizado del total que se han producido mientras estaba en campo
+- STL.: porcentaje de los robos totales que ha realizado del total que se han producido mientras estaba en campo
+- BLK.: porcentaje de los bloqueos rebdef totales que ha realizado del total que se han producido mientras estaba en campo
+- TOV.: perdidas de la posesion respocto a 100 jugadas
+- USG.: porcentaje de jugadas que interviene al jugador respecto del total de las que se realizan mientras está en campo
+- OWS: Responsabilida ofensiva del jugador en las victorias.
+- DWS: Responsabilida ofensiva del jugador en las victorias.
+- WS: responsabilidad de un jugador en las victorias
+- WS.48: media de la responsabilidad de las vuictorias en los 48 que dura el partido.
+- OBPM: Calcula el más/menos de un jugador en ataque respecto al rendimiento del equipo por cada 100 posesiones.
+- DBPM: Calcula el más/menos de un jugador en defensa respecto al rendimiento del equipo por cada 100 defensas.
+- BPM: Calcula el más/menos de un jugador respecto al rendimiento del equipo por cada 100 posesiones.
+- VORP: indica el impacto del jugador en comparación al impacto por cada 100 posesiones del equipo cuando es reemplazado a lo largo de 82 partidos. 
+
+Observando el tipo de variables y la definición se puede diferenciar en tres variables categóricas: player , country y Tm, y 25 variables numéricas. 
+Para estudiar las correlaciones entre el salario de cada jugador y el resto de caraterísticas vamos a tener en cuenta las variables numéricas. 
+
+Dadas estas caraterísticas , el numero de variables y la predicción propuesta, hay que realizar una regresión múltiple que explique las correlaciones entre la variable dependiente, el salario, y las variables explicativas, las caraterísticas de cada jugador. En este caso seleccionaremos aquellas numéricas. 
+
+
+### Diagramas de dispersión
+
+Un buen primer paso en la regresión múltiple es examinar las relaciones entre las variables explicativas y la explicada mediante gráficos de dispersión:
+
+
+```{r dispersion_plots,echo = FALSE}
+par(mfrow=c(2,3)) # para que en la hoja meustre 6 gráficos
+library(ggplot2)
+plot(nba_data$Salary, main = "Volatilidad de los salarios") 
+plot(nba_data$Salary, nba_data$NBA_DraftNumber, main = "Salary & NBA_DraftNumber")
+plot(nba_data$Salary, nba_data$Age, main = "Salary & Age")
+plot(nba_data$Salary, nba_data$G, main = "Salary & G")
+plot(nba_data$Salary, nba_data$MP, main = "Salary & MP")
+plot(nba_data$Salary, nba_data$PER, main = "Salary & PER")
+plot(nba_data$Salary, nba_data$TS., main = "Salary & TS.")
+plot(nba_data$Salary, nba_data$X3PAr, main = "Salary & X3PAr")
+plot(nba_data$Salary, nba_data$FTr, main = "Salary & FTr")
+plot(nba_data$Salary, nba_data$ORB., main = "Salary & ORB.")
+plot(nba_data$Salary, nba_data$DRB., main = "Salary & DRB.")
+plot(nba_data$Salary, nba_data$TRB., main = "Salary & TRB.")
+plot(nba_data$Salary, nba_data$AST., main = "Salary & AST.")
+plot(nba_data$Salary, nba_data$STL., main = "Salary & STL.")
+plot(nba_data$Salary, nba_data$BLK., main = "Salary & BLK.")
+plot(nba_data$Salary, nba_data$TOV., main = "Salary & TOV ")
+plot(nba_data$Salary, nba_data$USG., main = "Salary & USG.")
+plot(nba_data$Salary, nba_data$OWS, main = "Salary & OWS")
+plot(nba_data$Salary, nba_data$DWS, main = "Salary & DWS")
+plot(nba_data$Salary, nba_data$WS, main = "Salary & WS")
+plot(nba_data$Salary, nba_data$WS.48, main = "Salary & WS.48")
+plot(nba_data$Salary, nba_data$OBPM, main = "Salary & OBPM")
+plot(nba_data$Salary, nba_data$DBPM, main = "Salary & DBPM")
+plot(nba_data$Salary, nba_data$BPM, main = "Salary & BPM")
+plot(nba_data$Salary, nba_data$VORP, main = "Salary & VORP")
+```
+
+Mediante estos gráficos se pueden ver las relaciones entre las variables explicativas y la explicada. Podemos ver la distribución de los datos para valor de salario y en que parte se agrupan mayoritariamente cada variable. También se pueden ver los outliers de cada variable.
+
+### Regresión lineal multiple
+
+Hacemos una regresión lineal múltiple para conocer los coefcientes de correlación de cada variable respecto del salario.
+Esta primera regresión llamada "regres_nba", contine todas las variables numéricas y todas las observaciones de la muestra.
+
+```{r regresion_lineal_multiple, echo = FALSE}
+regres_nba = lm(Salary~.-Player -NBA_Country -Tm,data = nba_data) # realizamos la lm con todas las varibles menos las categoricas y con todas las observaciones de la muestra
+summary(regres_nba) # interpretamos la salida
+```
+Estos datos nos permiten  interpretar los coeficientes de correlación. Por ejemplo, por cada descenso de una posición en el draft cada jugador cobrará un probmedio de 60481$ menos al año.
+
+Las únicas variables significativas para un α = 0.05 son el número de draft, la edad, el número de partidos realizados y los minutos jugados. Aunque la significación no tiene por qué estar relacionada con las variables que utilizaremos para el modelo predictivo.
+
+
+### Intervalos de confianza para las variables.
+
+Estos datos muestran con una probabilidad del 95% en que rango se situan cada uno de los coeficientes de las variables de la regresión anterior.
+
+```{r intervalos_confianza, echo = FALSE}
+confint(regres_nba) # intervalos de confianza de los coeficientes de correlación de la regresión regres_nba(todas las observaciones y todas las variables numéricas)
+```
+
+Por ejemplo, para la variable draft, con una confianza del 95% la variacion de sueldo por cada descenso en un puesto en el draft el sueldo disminurá entre 85546.335$ y 35416.532$.
+
+
+## Análisis de residuos
+
+### Normalidad
+Representamos graficamente mediante QQplot la normalidad de los datos. Ayuda a seber si la distribución de los datos de la muestra siguen una distribución específica.
+
+```{r QQ_Plot,echo = FALSE}
+library(car)
+qqPlot(regres_nba, labels=row.names(mData), id.method="identify",
+       simulate=TRUE, main="Q-Q Plot") # realizamos el QQ-plot nos indica la distribucion de los datos. Si cumplen la normalidad los datos empiricos se sitúan sobre la línea 45º, sino no es una distribucion normal.
+```
+En este caso la distribución es "light tailed", ya que en la parte extrema los datos empíricos de desvían respecto los esperados(línea 45º)
+
+
+Se representa graficamente la distribución de los errores:
+
+```{r Distribución_errores,echo = FALSE}
+residplot <- function(fit, nbreaks=10) {
+  z <- rstudent(regres_nba)
+  hist(z, breaks=nbreaks, freq=FALSE,
+       xlab="Studentized Residual",
+       main="Distribution of Errors")
+  rug(jitter(z), col="brown")
+  curve(dnorm(x, mean=mean(z), sd=sd(z)),
+        add=TRUE, col="blue", lwd=2)
+  lines(density(z)$x, density(z)$y,
+        col="red", lwd=2, lty=2)
+  legend("topright",
+         legend = c( "Normal Curve", "Kernel Density Curve"),
+         lty=1:2, col=c("blue","red"), cex=.7)
+}
+# este grafico nos muestra la distribución de los errores 
+residplot(regres_nba)
+```
+
+#### Jarque Bera - contraste de normalidad de los residuos.
+El jaeque-Bera test nos informa sobre la normalidad de los errores. Para ello realiza un teste con as siguientes hipótesis:
+H0 = los residuos sigue una distribución normal
+H1 = sigue otro tipo de distribución.
+
+```{r Jarque_Bera,echo = FALSE}
+vResid=resid(regres_nba)
+library(fBasics)
+jbTest(vResid) 
+# hacemos el jarque Bera test para ver la normalidad de los residuos si p-valor > 0.05 aceptamos la H0 que nos indica que la distribucón de los errores es normal
+```
+ Los resultado del P-Valor nos indican que rechazamos la hipóteisis nula, por lo que la distribución de los errores no sigue una distribución normal
+
+
+#### Shapiro-Wilk - contraste de normalidad.
+El Shapiro-Wilk test nos informa sobre la normalidad de los errores. Para ello realiza un teste con as siguientes hipótesis:
+H0 = los residuos sigue una distribución normal
+H1 = sigue otro tipo de distribución.
+
+```{r Shapiro-Wilk,echo = FALSE}
+shapiro.test(vResid)
+# el shapiro test nos indica si los errores siguen una distribución normal. Si p-valor > 0.05 aceptamos la H0 que nos indica que la distribucón de los errores es normal
+```
+Como el  P-Valor<0.05 nos indica que se rechaza la hipóteisis nula, por lo que la distribución de los errores no sigue una distribución normal
+
+
+Tras estas comprobaciones y representacions se determina que no se cumple el supuesto de normalidad de los residuos para este modelo.
+
+### Validación Global
+
+
+
+```{r Validacion_global,echo = FALSE}
+library(gvlma)
+gvmodel <- gvlma(regres_nba) 
+summary(gvmodel)
+```
+
+
+### Multicolinealidad
+Estudia las correlaciones lineales entre las variables explicativas.
+Se determina por el Factor de inflación de varianza (VIF). Cuanto mayor es mayor multicolinealidad en una variable.
+En este caso determinamos una alta multicolinealidad si sqrt(vif(regres_nba)) > 2
+
+```{r multicolinealidad,echo = FALSE}
+vif(regres_nba)
+sqrt(vif(regres_nba)) > 2 # ibnterpretamos  que hay multicolinealidd si se da este supuesto = TRUE
+
+```
+
+Hay bastantes variables que muestran multicolinealidad.
+
+
+
+### Outliers
+
+Se comprueban graficamnete los valores atípicos para decidir si se eliminan o se cambian por la media o la mediana.
+
+```{r outliers,echo = FALSE}
+par(mfrow=c(1,1))
+hat.plot <- function(fit) {
+  p <- length(coefficients(fit))
+  n <- length(fitted(fit))
+  plot(hatvalues(fit), main="Index Plot of Hat Values")
+  abline(h=c(2,3)*p/n, col="red", lty=2)
+  identify(1:n, hatvalues(fit), names(hatvalues(fit)))
+}
+hat.plot(regres_nba) # muestra los valores que se situan alejados del resto de la muestra.
+```
+Este gráfico muestra que hay valores que se encuentran alejados del resto de valores. Estos son los valores atípicos.
+
+
+### Valores influyentes
+
+#### Influenceplot.
+Se realiza el plot de influencia para ver que valores están afectado más a la regresión. Lo realizamos sobre el conjunto de las observaciones de la muestra y según los valores de la regresión que contiene todas las observaciones y todas las variables numéricas.
+
+
+```{r influence_plot,echo = FALSE}
+influencePlot(regres_nba, id.method = "identify", main = "Influence Plot", 
+              sub = "Circle size is proportial to Cook's Distance" ) 
+# gráfico que muestra aquellas observaciones que influyen más en el modelo y por lo tanto lo pueden sesgar.
+```
+
+Dados los resultado del gráfico, considero oportuno crear eliminar de la muestra los valores más influyentes en el modelo.
+Suprimimos de la muestra los valores 166 y 143 ya que tienen demasiado influencia sobre el modelo. A la muestra que vamos a utilizar para crear el modelo se va a llamar: nba_data_clean
+
+
+
+````{r data_clean, echo = TRUE}
+nba_data_clean <- nba_data[-c(166,143,328,114),]
+nba_data_clean = na.omit(nba_data_clean)
+````
+
+#### Cook´s distance
+Con este gráfico podemos confirmar los datos del influence plot, Observamos que los valores que más influyen se identifican con los resultado del plot anterior
+```{r cooks_distance,echo = FALSE}
+cutoff <- 4/(nrow(nba_data)-length(regres_nba$coefficients)-2)
+plot(regres_nba, which=4, cook.levels=cutoff)
+abline(h=cutoff, lty=2, col="red")
+```
+
+
+
+
+### Regresión Lineal Múltiple con las observaciones seleccionadas:
+
+Realizamos la regresión para los datos de la muestra en la que se han quitado los valores influyentes. Esta parate de la muestra la hemos llamado nba_data_clean.
+
+```{r regresion_lineal_multiple_sin_outliers, echo = FALSE}
+regres_nba_clean = lm(Salary~.-Player -NBA_Country -Tm,data = nba_data_clean) # realizamos la lm con todas las varibles menos las categóricas sin los valores influyentes y con todas las variables
+summary(regres_nba_clean)
+
+```
+En este caso hay cuatro variables significativas para un α = 0.05. Aunque esto no tiene por qué tener relación con las variables usasadas en el modelo predictivo. 
+
+## Selección de variables
+
+En este caso se utiliza el modelo AIC mixto. Estudia la información de los errores en la varianza, queremos que sea la menor posible. Por lo tanto, a menor AIC mejor modelo predictivo.
+
+Finalmente indica cuales son las varibles que mejor funcionan en un modelo predictivo usando los datos en los que hemos eliminado los valores más influyentes.
+
+
+```{r AIC, echo=FALSE}
+library(MASS)
+
+stepAIC(regres_nba_clean, direction = "both")
+# podemos hacer el back y el forward, miramos cual de todos nos proporciona el resultado con un menor AIC y es el que elegimos
+```
+
+El modelo con menor AIC (información de los errores en la varianza) es el siguiente: lm(formula = Salary ~ NBA_DraftNumber + Age + G + MP + PER + X3PAr + ORB. + TRB. + USG. + WS + OBPM, data = nba_data_clean).
+
+Definimos este modelo como modelo_AIC.
+
+
+
+```{r regresion_AIC, echo = FALSE}
+# modelo propuesto por el criterio AIC, con los datos_clean
+modelo_AIC = lm(formula = Salary ~ NBA_DraftNumber + Age + G + MP + PER + 
+    X3PAr + ORB. + TRB. + USG. + WS + OBPM, data = nba_data_clean)
+
+
+
+```
+
+* Multicolinealidad
+Para asegurarnos que es un buen modelo predictivo, se realiza un examen de la multicolinealidad para el modelo propuesto por el criterio AIC.
+
+Establecemos que puede generar un problema en el modelo de predicción aquellas variables que sqrt(vif(modelo_AIC)) > 3.
+
+```{r multicolinealidad_AIC,echo = FALSE}
+vif(modelo_AIC)
+sqrt(vif(modelo_AIC)) > 3
+
+```
+Siguiendo este criterio vamos a prescindir de las siguientes variables: PER y OBPM.
+
+Definimos un nuevo modelo que contiene las variables propuestas por el criterio AIC y eliminando aquellas que muestras alta multicolinealidad.
+
+Definimos el modelo definitivo: modelo_def = lm(formula = Salary ~ NBA_DraftNumber + Age + G + MP + X3PAr + ORB. + TRB. + USG. + WS , data = nba_data_clean
+
+```{r regresion_def, echo = FALSE}
+
+modelo_def = lm(formula = Salary ~ NBA_DraftNumber + Age + G + MP + 
+    X3PAr + ORB. + TRB. + USG. + WS , data = nba_data_clean)
+# modelo para los datos_clean con las variables de la salida AIC y quitando tambien las de alta multicolinealidad
+summary(modelo_def)
+```
+En este caso tenemos 6 variables signitficativas para un α = 0.05 y 7 para un α = 0.1
+
+### Muestra aleatotria
+
+Se crea una muestra aleatoria del  total de nba_data_clean que será la que usemos para evaluar las predicciones de los salarios con el modelo anterioremete definido. En este caso se seleccionan 10 jugadores para la muestra aleatoria.
+
+```{r muestra_aleatoria, echo=FALSE}
+set.seed(c(1,2,3,4))
+
+nrow(nba_data_clean) # tenemos 455 precios pero vamos a  crear una muestra
+nmuestra <- 10 # muestra n = 10
+
+# Primero elegimos los numeros de la muestra y luego los seleccionamos
+muestra <- sample(1:nrow(nba_data_clean), nmuestra, replace = FALSE) # hay que numerarlos para poder escogerlos # son los 
+nba.muestra <- nba_data_clean[muestra,] # los jugadores que corresponden a nuestra muestra
+nba.muestra$Player
+
+```
+Estos son los nombre de los jugadores de la muestra aleatoria con la que vamos a evaluar nuestro modelo predictivo
+
+### Modelo predictivo - Prediccón de Salarios.
+
+Estos son los salarios para cada jugador de la muestra aleatoria según sus caraterísticas y el modelo definido.
+
+```{r prediccion_salarios, echo=FALSE}
+library(MASS)
+nba.muestra$pred <- predict(modelo_def, newdata = nba.muestra) # realizamos la prediccion  a partir de la regresion modelo_def para los 10 jugadores de la muestra aleatoria
+nba.muestra$pred
+```
+Estos son los salarios para cada jugador de la muestra aleatoria según sus caraterísticas.
+
+Ahora comparamos los salarios estimados con los salarios reales. Mostarmos la diferencia en $
+
+```{r predicción_vs_real,echo = FALSE}
+nba.muestra$diferencia <- nba.muestra$Salary - nba.muestra$pred # vemos la diferencia entre los sueldos reales y los estimados
+nba.muestra$diferencia
+```
+
+
+
+
+
+

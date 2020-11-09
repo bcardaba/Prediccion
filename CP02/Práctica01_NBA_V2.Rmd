@@ -1,0 +1,338 @@
+---
+title: "Práctica01_NBA"
+author: "Beatriz Cárdaba"
+date: "08/11/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+# Modelo predictivo de los Salarios NBA
+
+### Modelo a partir de las relaciones entre el salario y las caraterísticas del jugador.
+
+Para la creación del modelo disponemos de la base de datos nba_data, importamos los datos en el formato deseado e importamos las liberías que se vayan a utilizar.
+
+
+```{r import_data,echo = FALSE}
+library(here) # Comentar
+library(tidyverse)
+library(janitor) # Clean nnba
+library(skimr) # Beautiful Summarize
+library(magrittr) # Pipe operators
+library(corrplot) # Correlations
+library(ggcorrplot)  # Correlations
+library(PerformanceAnalytics) # Correlations
+library(leaps) # Model selection
+library(glmnet)
+library(car)
+nba_data = read.csv("./nba.csv") # ruta relativa de los datos importados
+# View(nba_data)
+```
+
+```{r Read Data}
+raw_data <-  read.csv("nba.csv")
+# (raw_data)
+```
+
+## EDA
+### Variables Nba
+
+```{r ter}
+raw_data %<>% clean_names() # %<>% es un doble pipe, mete row_Data en clean_nnba y el resultado lo guarda en rowdata
+# raw_data <- clean_nnba(raw_data)
+# raw_data <- raw_data %>% clean_nnba()
+# lo que hace es que nos limpia los nombre, todas en minusculas quitar los puntos
+colnames(raw_data) 
+```
+
+
+
+### Características del Dataset
+Es importante conocer las dimensiones de las caraterísticas y variables de los datos disponibles importados.
+
+```{r eda,echo = FALSE}
+str(raw_data) # visualizamos el tipo de variables de la base de datos, el número de observaciones y de variables
+```
+Contamos con 48 variables de un total de 485 observaciones. Las variables son de tipo character, int y num
+
+
+Se define el significado de cada una de las variables del modelo
+
+### Diccionario de datos:
+- Player: nombre del jugados
+- Salary: salario del jugadore en $
+- NBA_Country: país de nacionalidad del jugador
+- NBA_DraftNumber: posición en el Draft del jugador
+- Age: edad del jugador
+- Tm: equipo del jugador
+- G: partidos que ha disputado el jugador
+- MP: minutos que ha jugado el jugador
+- PER: valoración del jugador por minuto, estandarizado sabiendo que la media de la liga es 15.
+- TS.: porcentaje total de acierto en tiro. Tiendo en cuenta tiros de 2, de 3 y tiros libres.
+- X3PAr: porcentaje en tiros de 3
+- FTr: porcentaje en tiros libres
+- ORB.: porcentaje de los rebotes ofensivos que ha cogido del total que se han producido mientras estaba en campo
+- DRB.: porcentaje de los rebotes defensivos que ha cogido del total que se han producido mientras estaba en campo 
+- TRB.: porcentaje de los rebotes totales que ha cogido del total que se han producido mientras estaba en campo
+- AST.: porcentaje de las asistencias totales que ha realizado del total que se han producido mientras estaba en campo
+- STL.: porcentaje de los robos totales que ha realizado del total que se han producido mientras estaba en campo
+- BLK.: porcentaje de los bloqueos rebdef totales que ha realizado del total que se han producido mientras estaba en campo
+- TOV.: perdidas de la posesion respocto a 100 jugadas
+- USG.: porcentaje de jugadas que interviene al jugador respecto del total de las que se realizan mientras está en campo
+- OWS: Responsabilida ofensiva del jugador en las victorias.
+- DWS: Responsabilida ofensiva del jugador en las victorias.
+- WS: responsabilidad de un jugador en las victorias
+- WS.48: media de la responsabilidad de las vuictorias en los 48 que dura el partido.
+- OBPM: Calcula el más/menos de un jugador en ataque respecto al rendimiento del equipo por cada 100 posesiones.
+- DBPM: Calcula el más/menos de un jugador en defensa respecto al rendimiento del equipo por cada 100 defensas.
+- BPM: Calcula el más/menos de un jugador respecto al rendimiento del equipo por cada 100 posesiones.
+- VORP: indica el impacto del jugador en comparación al impacto por cada 100 posesiones del equipo cuando es reemplazado a lo largo de 82 partidos. 
+
+Observando el tipo de variables y la definición se puede diferenciar en tres variables categóricas: player , country y Tm, y 25 variables numéricas. 
+Para estudiar las correlaciones entre el salario de cada jugador y el resto de caraterísticas vamos a tener en cuenta las variables numéricas. 
+
+Dadas estas caraterísticas , el numero de variables y la predicción propuesta, hay que realizar una regresión múltiple que explique las correlaciones entre la variable dependiente, el salario, y las variables explicativas, las caraterísticas de cada jugador. En este caso seleccionaremos aquellas numéricas. 
+
+
+## Summarize Data
+```{r Summarise Data}
+
+skim(raw_data) # es un summary pero mucho más bonito
+# importante mirar la sd si esbja es que no cambia no da mucho informacion o la transformamos o  la quitamos
+
+```
+
+## Data Wrangling data
+
+* Proceso de limpiza de datos que vamos a utilizar.
+
+```{r Data Wranling}
+# delete duplicate. Siempre se eliminan los duplicados
+# Que hacer con los NA -1 eliminar, cuando tienes muchos datos los puedes quitar y no varia.
+# 2.- si es un dato numerico se puede cambiar por una media, de todos los jugadores o la media de unos jugadores con caraterísticas parecidas. 3.- hacer u cluster de clasificacion
+# Remove duplicate rows of the dataframe
+raw_data %<>% distinct(player,.keep_all= TRUE)
+
+# delete NA's
+raw_data %<>% drop_na() # en este caso los quitamos por solo hay dos NA
+
+# Summarise
+skim(raw_data) # hacemos un resumen para ver que no hay missings ni duplicados
+
+```
+
+
+### Diagramas de dispersión
+
+
+Mediante estos gráficos se pueden ver las relaciones entre las variables explicativas y la explicada. Podemos ver la distribución de los datos para valor de salario y en que parte se agrupan mayoritariamente cada variable. También se pueden ver los outliers de cada variable.
+
+```{r fig.height = 20, fig.width = 8, fig.align = "center"}
+# voy a relacioner mi target (salario) con el resto de variables. Correlacion graficamente
+
+raw_data %>% 
+  select_at(vars(-c("player","nba_country","tm"))) %>%  # quito las variables categoricas
+  tidyr::gather("id", "value", 2:25) %>% 
+  ggplot(., aes(y=salary, x=value)) +
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE, color="black")+
+  facet_wrap(~id,ncol=4,scales="free_x")
+```
+
+
+Vemos que por los dibujos no hay ninguna variable que explique mucho el salario.
+Por eso vamos a hacer lo mismo pero con logaritmos.
+
+```{r fig.height = 20, fig.width = 8, fig.align = "center"}
+
+raw_data %>% 
+  select_at(vars(-c("player","nba_country","tm"))) %>% 
+  tidyr::gather("id", "value", 2:25) %>% 
+  ggplot(., aes(y=log(salary), x=value))+ # ponemos el log
+  geom_point()+
+  geom_smooth(method = "lm", se=FALSE, color="black")+
+  facet_wrap(~id,ncol=4,scales="free_x")
+```
+
+Por los gráficos y los resultado de la práctica anterior vamos a tomar los logaritmos de la variable dependiente salarios ya que son cifras muy elevadas:
+
+
+```{r log(salay)}
+log_nba <- raw_data %>% mutate(salary = log(salary)) # cambiamos la variable salary por su logaritmo
+
+```
+
+## Training set y Testing set
+
+Generamos la parte de la muestra para training, un 80% de la muestra. El 20% restante pertenece al testing set.
+
+```{r}
+library(rsample)
+set.seed(123)
+data_split <- initial_split(log_nba, prob = 0.8, strata = salary) # input <- rawdata
+data_train <- training(data_split)
+data_test <- testing(data_split)
+```
+
+### Matrices del trainig set y del testing set
+
+- Hacemos una matriz que recoge los datos del trainig test, es decir, del 80% de la muestra de las variables de la regresion indicada
+
+```{r}
+nba_train_x <- model.matrix(salary~.-tm - nba_country - player,data_train)[, -1] # introducimos el modelo de la prediccion, en este caso excluimos las variables categóricas. Indicamos que los datos son los de data_train
+nba_train_y <- (data_train$salary) # los datos de la variable dependiente, en este caso salary
+dim(nba_train_x)# nos inidca la forma de la matriz de los datos de la matriz data_train (80% de la muestra)
+```
+- Ahora realizamos la matriz de los valores del testing set, es el 20% de la muestra.
+
+```{r}
+# Creamos una matriz con la datos de la parte test:
+nba_test_x <- model.matrix(salary ~. -tm - nba_country - player, data_test)[, -1]
+nba_test_y <- (data_test$salary)
+```
+
+## Elastic Net
+
+Representamos graficamente los resultados de aplicar diferenets alphas.
+Para alpha = 1 estamos representando el modelo Lasso, podemos ver como van disminuyendo el número de variables. Esto es porque el modelo Lasso hace que klos coeficintes de algunas variables sean 0, lo que hace que desaparezcan.
+
+Pra alpha = 0 ese representa un modelo Ridge, vemos que no desaparece ningua variable. El modelo Ridge acerca los coeficientes a 0, pero nunca los omite por lo que no disminuye el número de variables.
+
+```{r}
+lasso <- glmnet(nba_train_x, nba_train_y, alpha = 1.0)
+elastic1 <- glmnet(nba_train_x, nba_train_y, alpha = 0.25)
+elastic2 <- glmnet(nba_train_x, nba_train_y, alpha = 0.75)
+ridge <- glmnet(nba_train_x, nba_train_y, alpha = 0.0)
+
+par(mfrow = c(2, 2), mar = c(6, 4, 6, 2) + 0.1)
+plot(lasso, xvar = "lambda", main = "Lasso (Alpha = 1)\n\n\n")
+plot(elastic1, xvar = "lambda", main = "Elastic Net (Alpha = .25)\n\n\n")
+plot(elastic2, xvar = "lambda", main = "Elastic Net (Alpha = .75)\n\n\n")
+plot(ridge, xvar = "lambda", main = "Ridge (Alpha = 0)\n\n\n")
+```
+
+
+### Tunning Elastic net:
+
+Creamos la estructura de la tabla que nos va a perminrtuirs visulaizar los errores para cada alpha(de 0 a 1, entramos de 0.1)
+
+```{r}
+# maintain the same folds across all models
+fold_id <- sample(1:10, size = length(nba_train_y), replace=TRUE)
+# search across a range of alphas
+tuning_grid <- tibble::tibble(
+  alpha      = seq(0, 1, by = .1),
+  
+  mse_min    = NA,
+  mse_1se    = NA,
+  lambda_min = NA,
+  lambda_1se = NA
+)
+tuning_grid
+```
+
+
+Construimos la tabla que nos permita seleccionar para cada alpha el mejor Lambda. Hay que eleguir el alpha que minimize los errores(mse)
+
+```{r}
+for(i in seq_along(tuning_grid$alpha)) {
+  # cv.glmnet: we want to use cross-validation to obtain the optimal values for lambda. By default it uses 10-Fold cross-validation. For that we need to specify the Training sets: The train_x to predict train_y.
+  # fit CV model for each alpha value
+  # PARAMETERS: Training sets: The train_x to predict train_y.
+  fit <- cv.glmnet(nba_train_x, nba_train_y, alpha = tuning_grid$alpha[i], foldid = fold_id)
+  
+  # MSE: sum of the squared residuals divided by the sample size.
+  # extract MSE and lambda values.
+  tuning_grid$mse_min[i]    <- fit$cvm[fit$lambda == fit$lambda.min]
+  tuning_grid$mse_1se[i]    <- fit$cvm[fit$lambda == fit$lambda.1se]
+  tuning_grid$lambda_min[i] <- fit$lambda.min
+  tuning_grid$lambda_1se[i] <- fit$lambda.1se
+}
+
+tuning_grid
+```
+
+
+
+
+Representamos graficamente los errores, eligiremos el modelo más sencillo dentro de los errores mínimos
+
+
+```{r}
+# Representamos graficamente los standard error para las diferentes alphas:
+tuning_grid %>%
+  mutate(se = mse_1se - mse_min) %>%
+  ggplot(aes(alpha, mse_min)) +
+  geom_line(size = 2) +
+  geom_ribbon(aes(ymax = mse_min + se, ymin = mse_min - se), alpha = .25) +
+  ggtitle("MSE ± one standard error")
+
+```
+
+Dado el criterio de selección de mínimos errores y visualizandolo en el gráfico, en este caso seleccionaremos el modelo Lasso. es capaz de realizar una predicción con los errores mínimos con un modelo más sencillo, ya que elimina variables.
+
+```{r}
+# Hacemos el modelo lasso  y representamos graficamnete los errores minimos respecto del número de variables
+lasso <- cv.glmnet(
+  x = nba_train_x,
+  y = nba_train_y,
+  alpha = 1
+)
+# plot results
+plot(lasso)
+```
+
+Con este gráfico observamos que el mínimo error see encutra utilizando entre 8 y 4 variables por lo que ese será el modelo que utilicemos
+
+
+## Predicción
+
+
+Error mínimo aplicando Lasso:
+
+```{r}
+cv_lasso   <- cv.glmnet(nba_train_x, nba_train_y, alpha = 1)
+min(cv_lasso$cvm)
+```
+
+Media del error aplicando Lasso, diferencia entre valores reales y valores de Predicción:
+
+```{r}
+pred <- predict(cv_lasso, s = cv_lasso$lambda.min, nba_test_x)
+mean((nba_test_y - pred)^2)
+```
+
+Error mínimo con Alpha = 0.2
+
+```{r}
+# some best model
+cv_net <- cv.glmnet(nba_train_x, nba_train_y, alpha = 0.2)
+min(cv_net$cvm)
+```
+
+
+Media del error de Predicción Alpha = 0.2
+```{r}
+# predict
+pred <- predict(cv_net, s = cv_net$lambda.min, nba_test_x)
+mean((nba_test_y - pred)^2)
+```
+
+
+
+
+
+
+
+
+
+
+
+
