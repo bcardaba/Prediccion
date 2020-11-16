@@ -1,0 +1,230 @@
+---
+title: "Predicción Ventas de Apple. ETS & ARIMA"
+author: "Beatriz Cárdaba"
+date: "16/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+
+
+
+```{r IMPORTAMOS LIBRERÍAS}
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(skimr)
+library(here) # Comentar
+library(janitor) # Clean names
+library(magrittr) # Pipe operators
+library(corrplot) # Correlations
+library(ggcorrplot)  # Correlations
+library(PerformanceAnalytics) # Correlations
+library(ggplot2)
+require(forecast)
+require(xts)
+require(ggplot2)
+library(ggfortify)
+```
+
+# Import Data
+
+```{r Import Data}
+data <- read_delim("IngresosApple.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+Ventas = data$Ingresos
+Date = seq(as.Date("2008/04/01"),as.Date("2017/07/01"), by = "quarter")
+head(data)
+```
+
+
+
+# ETS
+El objetivo es la creación de un modelo a partir de de las componentes:  errores, tendendencia y estacionalidad. Que pueden ser multiplicativos o aditivos (y aditivos suavizados).
+
+
+## Transformación de Datos
+
+Hay que convertir el data farme con los datos en un modelo de tabla XTS. Unos df especiales donde el índice de los datos está generado por un índice de tiempo.
+
+ - Transformamos a XTS
+
+Se cambia el índice de la tabla por la unidades de tiempo.
+
+```{r Formato XTS}
+xts_Ventas = xts(Ventas,order.by = Date)
+head(xts_Ventas)
+```
+
+
+ - Transformamos en datos trimestrales
+
+El índice temporal en este caso deber ser trimestral.
+
+```{r Trimestral}
+xts_Ventas = to.quarterly(xts_Ventas)
+```
+
+ - Transformamos a zoo Data:
+
+```{r ZOO}
+zVentas = as.zoo(xts_Ventas$xts_Ventas.Close)
+```
+
+
+ - Visualizar gráficamente los datos para explorar las posibles tendencias:
+ 
+```{r AUTOPLOT}
+autoplot(zVentas)+ggtitle("Ventas Trimestrales Apple")+xlab("Trimestres")+ylab("Ingresos")
+```
+
+En este caso se observa una tendencia creciente de los datos.
+
+Se visualiza si los datos tienen alguna componente estacional, para ello se transforman los datos mediante una media estacionaria.
+
+```{r  }
+# dibujamos los valores por cada trimestre para ver como varían
+ggfreqplot(as.ts(zVentas), freq = 4, nrow = 1, facet.labeller = c("1T","2T","3T","4T")) + 
+  ggtitle("Ventas Trimestrales")
+```
+
+Se observa un comportomiento estacional ya que las medias se comportan diferente en función del trimestre, Sobre todo destaca el incremento de las ventas en el cuarto trimestre a partir del año 2012. Además el promedio de las ventas del primer trimestre es superior a las evntas en el Q2 y Q3.
+
+```{r gráfico componentes}
+plot(stl(as.ts(zVentas)[, 1], s.window = "periodic"), main = "Componentes")
+```
+
+
+Tras la visualización de estos gráficos se puede concluir que los ingresoso de Apple muestran una tendencia positiva con estacionalidad. Vemos como cada año los ingresos medios van aumentando y como en varían estos de forma parecida en cada trimestre, siendo los Q4 y Q1 de cada año cuando más ventas se realizan coincidiendo con la campaña navideña.
+
+
+
+## Predicción:
+
+
+__Seleción de muestra: __
+
+En primer lugar, se deben seleccionar los datos con los que vamos a realizar el modelo predictivo. Para este modelo dejaremos fuera del entrenamiento las observacines del último año, por lo tanto los tres últimos trimestres de los que existen datos, ya que finalizan en 2017Q3.
+
+```{r MUESTRA}
+# creo una muestra que contiene todos los elementos menos los tres últimos
+#Select number of observation to compare forecast
+cOmit=3
+#Data Size
+nObs=length(zVentas)
+muestra <- window(zVentas,start=index(zVentas[1]),end=index(zVentas[nObs-cOmit]))
+```
+
+### Selección Automática del modelo ETS
+
+Se utiliza la fórmula ets que selecciona automáticamente el mejor modelo ETS.
+
+Estos son los datos que predice:
+
+```{r MODELO ETS}
+fit_ets<-ets(muestra)
+#forecast model
+fventas.ets=forecast(fit_ets)
+#Results
+summary(fventas.ets)
+```
+En el modelo ETS la distribución de los errores es  Multiplicativa , la tendencia aditiva y la estacionalidad multiplicativa. También es conocido este nmétodo ets como: *"Multiplicative Holt-Winters’ methodwith multiplicative errors"*
+Graficamos los datos reales vs el forecast que predice
+
+```{r FORECAST ETS}
+plot(fventas.ets)
+lines(window(zVentas),type="o")
+```
+
+
+Comparamos los datos reales de 2017 con su predicción por trimestres:
+
+```{r PRECISIÖN}
+matrix(c(fventas.ets$mean[1:cOmit],zVentas[(nObs-cOmit+1):nObs]),ncol=2) 
+```
+
+# ARIMA
+
+Box y Jenkins desarrollaron modelos estadísticos para series temporales que tienen en cuenta la de pendencia existente entre los datos, esto es cada observación en un momento dada es modelada en función de los valores anteriores. Los análisis se basan en un modelo explícito. LOs modelos se conocen con el nombre genérico de ARIMA (Autoregresive Interegated Moving Average), que deriva del modelo Autoregresivo que tiene en cuenta los pvalroes de los periodos anteriores , el modelo Integrado, y del modelo MA que tiene en cuenta los errores en los periodos anteriores.
+
+
+### Predicción
+
+__Seleción Automática del modelo ARIMA: __ 
+
+Hay que seleccionar el modelo ARIMA (p,d,q)(P,D,Q). Donde (p,d,q) se refiere a la parte no estacional del modelo y (P,D,Q) se refiere a las variaciones estacionales del modelo. Seleccionamos este modelo de manera automática:
+
+o Nonseasonal order: Número de diferencias regulares d
+o Seasonal order: Numero de diferencias estacionales D
+o AR: Orden del autorregresivo regular p
+o MA: Orden de la media móvil regular q
+o SAR: Orden del autorregresivo estacional P
+o SMA: Orden de la media móvil estacional Q
+
+```{r MODELO ARIMA}
+# la fórmula auto.arima selecciona el mejor modelo ARIMA
+fit_arima <- auto.arima(muestra) # no indico el lambda para que escoja el más adecuado, utilizo la muestra que deja fuera a los valores de 2017
+# visualizo el arima
+summary(fit_arima)
+```
+Los coeficientes me indican que los valores de este periodo dependen de los del periodo anterior (p=1) y los errores del periodo estacional dependen de los errores del periodo anterior(Q=1)
+
+
+Visualizamos el modelo:
+
+```{r}
+ggtsdisplay(fit_arima$residuals)
+```
+
+Se observa que tanto los errores en ACF y en PACF se encuentran entre las bandas, cumplen las exigencias.
+
+__BOX_LJUNG TEST: __
+El test Box-Ljung consiste en contrastar si los retardos de la acf son cero a la vez:
+
+```{r BOX_LJUNG TEST}
+Box.test(fit_arima$residuals,lag = 3, fitdf = 1, type = "Lj")
+Box.test(fit_arima$residuals,lag = 6, fitdf = 1, type = "Lj")
+Box.test(fit_arima$residuals,lag = 12, fitdf = 1, type = "Lj")
+```
+
+El p-valor > 0.05 por lo que es Ruido Blanco.
+
+
+###  Predicción de Ventas
+
+Predecimos las ventas con el modelo arima elegido automáticamente:
+
+
+
+```{r FORECAST ARIMA}
+Fventas.arima <- forecast(fit_arima) # aplicamos fc al modelo arima elegido
+# visulaizamos los resultados de la predicción
+summary(Fventas.arima)
+```
+
+Representación gráfica de los resultados de la predcción del modelo ARIMA:
+
+```{r REPRESENTACION GRAFICA ARIMA, message=FALSE}
+df_new <- data.frame(value = as.vector(zVentas),
+                     time = time(zVentas))
+ggplot(df_new) + geom_point(aes(x = time, y = value)) + geom_line(aes(x = time,y = value)) +
+  geom_forecast(Fventas.arima,alpha = 0.4) + ggtitle("ARIMA: Predicción Ventas de Apple")
+```
+
+
+
+# COMPARACIÓN ETS vs ARIMA
+
+En primer lugar se comparan los errores:
+
+```{r COMPARACION ETS ARIMA}
+checkresiduals(fit_ets)
+checkresiduals(fit_arima)
+```
+
+
