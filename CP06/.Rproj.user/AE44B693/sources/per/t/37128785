@@ -1,0 +1,32 @@
+{
+    "id": "37128785",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1606337346251.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "expression": "BMW_data",
+        "caption": "BMW_data",
+        "totalObservations": "1747",
+        "displayedObservations": "1747",
+        "variables": "1",
+        "cacheKey": "2B2E90DE",
+        "object": "BMW_data",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=BMW_data&cache_key=2B2E90DE&max_cols=50",
+        "preview": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 25895908313858135,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1606337346251,
+    "read_only": false,
+    "read_only_alternatives": []
+}

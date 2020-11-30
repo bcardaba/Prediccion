@@ -1,0 +1,294 @@
+---
+title: "Caso Práctico 06: BMW vs Volkswagen"
+author: "Beatriz Cárdaba"
+date: "25/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+### Utilizando datos diarios de los dos series desde el año 2014, debemos analizar la relación entre BMW y Volkswagen, contestando a las siguiente preguntas:
+
+__Estimar el modelo garch de BMW__
+
+```{r}
+library("quantmod") #Package to download financials historical data
+library(forecast)
+library("fGarch")
+```
+
+
+El modelo GARCH es un modelo autorregresivo generalizado que captura las agrupaciones de volatilidad de las rentabilidades a través de la varianza condicional. 
+
+En otras palabras, el modelo GARCH consiste en estimar un modelo ARMA para la volatilidad (varianza de los errores) . En este entorno, la volatilidad nos indica los riesgos de de los activos. 
+
+
+```{r}
+
+#funciones
+archTest <- function(rtn,m=10){
+# Perform Lagrange Multiplier Test for ARCH effect of a time series
+# rtn: time series
+# m: selected AR order
+# TSAY(2013)
+y=(rtn-mean(rtn))^2
+T=length(rtn)
+atsq=y[(m+1):T]
+x=matrix(0,(T-m),m)
+for (i in 1:m){
+x[,i]=y[(m+1-i):(T-i)]
+}
+md=lm(atsq~x)
+summary(md)
+}
+```
+
+En este caso se va aestimar un modelo GARCH para los activos de BMW desde 2014, para ello se importan los datos de YAHOO FINANCE de BWM en la bolsa alemana. Se seleccionan los datos ajustados de cierre de cada jornada ya que el análisis será diario.
+
+
+```{r}
+#Yahoo ticker (stock or index)
+sSymbol="BMW.DE"
+#get data from yahoo
+mData<-getSymbols(sSymbol ,from="2014-01-01",to="2020-11-23",auto.assign=FALSE)
+#Define workdata
+BMW_data=Ad(mData) # datos ajustados
+
+```
+
+Visualizamos el Precio y la Rentabilidad de los activos de BMW:
+
+```{r  }
+#Calculate Daily Arithmetic Return
+# Indicamos que nos interesan los datos diarios
+BMW_dRentCont=dailyReturn(BMW_data,type='log',leading=FALSE)
+#Exclude NA (First data)
+BMW_dRentCont=na.exclude(BMW_dRentCont)
+
+#Volatilidad GARCH
+#Plot return squared
+plot.zoo(cbind(Ad(mData),BMW_dRentCont,BMW_dRentCont^2),main=paste(sSymbol,"  Rentabilidad y Volatilidad"),xlab="años",ylab=c("Precio","rentabilidad","Volatilidad"))
+```
+
+Se observa que ante una caída en el precio la rentabilidad de comprar esos activos sube, si se compra barato un activo es más probable que se revalorice e incremente su valor. Además estos cambios provocan un aumento de la volatilidad.
+
+
+Se realiza es test para conocer si la media de los rendimientos es 0.
+
+```{r  }
+#testing mean
+t.test(BMW_dRentCont)
+```
+Dado el valor del P-Value no podemos rechazar la H0 que indica que la media de los rendimietnos es 0
+
+Calculamos la Autocorrelación de los rendimientos. Es decir como influyen los valores de los rendimientos anteriores en los rendimientos porsteriores.
+
+Y comprobamos si son ruido blanco:
+
+```{r  }
+#ACF & PACF 
+# VolProxy=abs(dRentCont) # absolute value
+VolProxy=BMW_dRentCont^2 #squared
+#ACF y PACF
+ggtsdisplay(VolProxy) 
+
+```
+Vemos que la volatilidad no es ruido blanco, por lo que habrá que realizar un ARMA sobre la volatilidad, es lo que llamamos un modelo GARCH
+
+Realizamos los Ljung-Box Test para diferentes grados de libertad:
+
+```{r  }
+#Ljung-Box Test 
+Box.test(VolProxy,lag=10,  type="Lj")
+Box.test(VolProxy,lag=20,  type="Lj")
+Box.test(VolProxy,lag=40,  type="Lj")
+```
+
+Todos elloss presentan un P-Valor cercano a 0
+
+
+Test de Multiplicadores de Langrage de Engle (LM), donde la hipótesis nula es de no GARCH
+```{r  }
+#LM test
+archTest(BMW_dRentCont,20)
+
+```
+
+
+La hiposteis nula nos indica que no hay GARCH, dado el P-VAlor elevado de algunos de los interceptos no se puede rechazar esta hipótesis.
+
+## Modelos ARCH y GARCH:
+
+
+__Modelos ARCH__
+Los modelos de ARCH se emplean comúnmente en el modelado de series de tiempo financieras que presentan agrupaciones de volatilidad variables en el tiempo, es decir, períodos de oscilaciones entremezclados con períodos de relativa calma. A veces se considera que los modelos de tipo ARCH pertenecen a la familia de modelos de volatilidad estocástica , aunque esto es estrictamente incorrecto ya que en el tiempo t la volatilidad es completamente predeterminada (determinista) dados los valores anteriores.
+
+__Modelo ARCH(q)__
+
+Cuando la varianza condicional del modelo ARCH depende de m´as de un retardo, es decir, también se tienen en cuenta los anteriores a este para estimar dicha varianza, se extiende el modelo tomando el nombre de ARCH(q), donde q es el n´umero de retardos que se tienen en cuenta.
+
+Estimamos un modelo ARCH(1)
+```{r}
+#ARCH(1)
+m1=garchFit(~1+garch(1,0),data=BMW_dRentCont,trace=F) # Fit an ARCH(1) model
+summary(m1)
+resi=residuals(m1,standardize=T) #residuals
+resi=xts(resi,order.by=index(BMW_dRentCont)) #residuals as xts
+tsdisplay(resi^2) #acf pacf residuals
+```
+
+Los dos primeros test son acerca de la normalidad(Jarque-Vera y Shapiro-Wilk Tests), los errores al cuadrado es ruido blanco, sigue siendo GARCH por lo que no es correcto este modelo.
+El test LM también indica que sigue estando el efecto GARCH por lo que hay que realizar el modelo GARCH para quitar este efecto.
+
+
+__Modelos GARCH__
+
+La varianza condicional no solo depende de los cuadrados de las perturbaciones, como en el modelo ARCH de Engle, sino que
+adem´as tambi´en depende de las varianzas condicionales de periodos anteriores, es decir, de σ^2t pasados.
+
+
+
+
+```{r  }
+#GARCH(1,1)
+m2=garchFit(~1+garch(1,1),data=BMW_dRentCont,trace=F) # Fit an GARCH(1,1) model
+summary(m2)
+```
+
+
+```{r echo = TRUE}
+resi=residuals(m2,standardize=T) #residuals
+resi=xts(resi,order.by=index(BMW_dRentCont)) #residuals as xts
+tsdisplay(resi^2) #acf pacf residuals
+plot(m2)
+```
+Ahora los test nos dice que NO HAY garch, los residuos ya no tienen efecto GARCH. Se observa como los residuos ya son ruido blanco.
+
+Los derivados se negocia el precio futuro , la volatilidad del activo subyacente determina el valor de los derivados.
+
+
+A continuación se comprueba si distribución condicional es t-student
+```{r echo = TRUE}
+t-student
+m3=garchFit(~1+garch(1,1),data=BMW_dRentCont,trace=F,cond.dist="std")
+summary(m3)
+plot(m3)
+```
+
+Los test me dicen que los erroes cumple con la hipótesis de que la distribución es t-student, obviamente no cumple jarque vera porque la distribucion de los errores no es normal, es la distribuciónn de t-student como se ha indicado en la distribución condicionada
+
+Se grafica la volatilidad anual:
+```{r echo = TRUE }
+v1=volatility(m3) # Obtain volatility
+v1=xts(v1,order.by=index(BMW_dRentCont)) # volatility as XTS
+plot(sqrt(252)*v1)
+```
+
+Se observa como el pico de mayor volatilidad coincide con el estado de alarma por la pandemia del COVID-19.
+
+
+```{r echo = TRUE}
+resi=residuals(m3,standardize=T) # Standardized residuals
+resi=xts(resi,order.by=index(BMW_dRentCont)) # Standardized residuals as XTS
+tsdisplay(resi^2) #acf pacf residuals
+plot(resi)
+```
+Se observa como el cuadrado de los residuos es ruido blanco
+
+
+### Predicción:
+
+Se predice a partir de la volatilidad, predice la rentabilidad media que esperas del activo y también estima la volatilidad
+```{r echo = TRUE  }
+#predict(m3) #forecast volatility
+#predict(m3, n.ahead = 10, plot=TRUE, crit_val=2) #plot with 2*standard error
+#predict(m3,n.ahead=20,plot=TRUE,conf=.9,nx=100) # plot 100 data with 90% confidence
+```
+
+# Plantear un modelo VAR mensual entre los activos de BMW y de VOLKSWAGEN.
+
+Se extraen los activos de estas compaías a traves de la librería Quantmod en Yahoo Finance.
+
+```{r  }
+library(quantmod)
+library(vars)
+```
+
+Loas activos son datos diarios desde el 2014-01-01" hasta el "2020-11-25", sin embargo, en este casp se calculan las rentabilidades mensuales. Para ello se genera un vector con los datos mensuales de ambas compañías
+
+```{r  }
+BMW=getSymbols("BMW.DE",from="2014-01-01",to="2020-11-25",env=NULL)
+Volkwagen=getSymbols("VOW.DE",from="2014-01-01",to="2020-11-25",env=NULL)
+```
+
+
+
+```{r  }
+# Generar rentabilidad mensual
+rBMW=monthlyReturn(BMW[,6])
+rVOW=monthlyReturn(Volkwagen[,6])
+```
+
+```{r  }
+#generar vector
+vY=cbind(rBMW,rVOW)
+colnames(vY)=c("BMW","VOW")
+vY=na.omit(vY)
+```
+
+### Modelos VAR:
+Utilizamos un modelo del tipo vector autoregresivo (VAR) cuando queremos caracterizar las interacciones simultáneas entre un grupo de variable. Un VAR es un modelo de ecuaciones simultáneas formado por un sistema de ecuaciones de forma reducida sin restringir. Que sean ecuaciones de forma reducida quiere decir que los valores contemporáneos de las variables del modelo no aparecen como variables explicativas en ninguna de las ecuaciones. Por el contrario, el conjunto de variables explicativas de cada ecuación está constituido por un bloque de retardos de cada una de las variables del modelo. Que sean ecuaciones
+no restringidas significa que aparece en cada una de ellas el mismo grupo de variables explicativas.
+
+Seleccionamos el mejor modelo var automáticamente.
+```{r  }
+#Seleccionar modelo
+VARselect(vY)
+
+```
+
+```{r}
+#estimar
+model.var=VAR(vY)
+summary(model.var)
+```
+
+```{r}
+model.var1=VAR(vY,type="none")
+summary(model.var1)
+```
+
+
+Se calcula la causalidad de Granger para saber si las rentabilidades BMW afectan aa las rentabilidades Volskwagen y viceversa, es decir, si hay un efecto bidireccional:
+
+```{r  }
+#causalidad de granger
+causality(model.var1)
+```
+La hipótesis nula indica que los que no hay casulaidada entre los valores de ambas empresas, sin embargo, en este caso, el p-valor cercano a 0 nos indica que no podemos acpatr la H0 por lo que es posible la existencia de una relación bdireccional
+
+Esto quiere decir que existe una relación contemporánea.
+
+Vista esta caulaidad a continuación, se estudia como va a afectar en Volskwagen un cambio porducido en BMW, y viceversa.
+
+```{r  }
+#respuesta al impulso
+model.ri=irf(model.var1)
+model.ri
+plot(model.ri)
+```
+
+Vemos como afectan los cambio de Voskwagen en BMW y viceversa.
+ De os coeficientes y los graficos se observa como un efecto positivo en Volskwagen va a repercutir negativamente en BWM.
+ Y un cambio negativo en Volkswagen , va a tener un efecto negativo en BMW , pero en menor medida
+
+Con estados datos es posible realizar una predicción para los valores futuroos posibles que van a tomar ambas empresas
+```{r  }
+##prediccion
+predict(model.var1, n.ahead = 8, ci = 0.95)
+```
+

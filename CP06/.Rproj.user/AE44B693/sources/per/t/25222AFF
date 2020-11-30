@@ -1,0 +1,32 @@
+{
+    "id": "25222AFF",
+    "path": null,
+    "project_path": null,
+    "type": "r_dataframe",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1606580681704.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "expression": "BMW_dRentCont",
+        "caption": "BMW_dRentCont",
+        "totalObservations": 1744,
+        "displayedObservations": 1744,
+        "variables": 1,
+        "cacheKey": "3E36F397",
+        "object": "BMW_dRentCont",
+        "environment": "",
+        "contentUrl": "grid_resource/gridviewer.html?env=&obj=BMW_dRentCont&cache_key=3E36F397&max_cols=50",
+        "preview": 0
+    },
+    "folds": "",
+    "lastKnownWriteTime": 7521960752118263610,
+    "encoding": "",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1606580681704,
+    "read_only": false,
+    "read_only_alternatives": []
+}
