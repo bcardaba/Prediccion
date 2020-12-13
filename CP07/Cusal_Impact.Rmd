@@ -1,0 +1,170 @@
+---
+title: "Causal Impact"
+author: "Beatriz Cárdaba"
+date: "12/12/2020"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+## Utilizando datos diarios de los dos series desde el año 2014, debemos analizar la relación entre BMW y Volkswagen utilizando el modelo de Causal Impact, para estimar el efecto del diesel gate.
+
+El objetivo del presente estudio será conocer y plicar el efecto del acontecimiento "dieselgate" en las series temporales de los activos de Volkswagen y BMW. 
+
+Dieselgate: En septiembre de 2015 salió a la luz que Volkswagen había instalado ilegalmente un software para alterar los resultados de los controles técnicos de emisiones contaminantes en 11 millones de automóviles con motor diésel, vendidos entre 2009 y 2015.
+
+Dadas las careterísticas de este suceso suponemos que tuvo un gran impacto en los valores de los activos de estas compañías automovilísticas. A continuación se va aa anlizar como afectó especialmente a estas dos empresas:
+
+__Liberías y datos.__
+Para llevar a cabo el análisis se van a importan diferenets librerías, en especial el Causal Impact se va a realizar con la librería CausalImpact proporcionada por Google.
+
+Los datos de la serie estarán identificados como pre_dieselgate antes de que estallara y post_dieselgate después de la polémica. Los dtos comienzan el 01/01/2014 y finalizan el 10/12/2020, el cambio entre pre y post es el 01/09/2015
+
+
+```{r, include=FALSE}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(xts)
+library(tseries)
+library(CausalImpact)
+```
+
+
+```{r}
+start = "2014-01-01"
+ci_date = "2015-09-01"
+end = "2020-12-13"
+
+#definimos los periodos en los que que queremos definir la muestra
+pre_dieselgate = as.Date(c(start, ci_date))
+post_dieselgate = as.Date(c(ci_date, end))
+```
+
+
+```{r include=FALSE}
+# creamos las series temporales para ambas compañías
+Volkswagen = get.hist.quote(instrument = 'VOW.DE',
+                            start = start,
+                            end = end,
+                            quote = 'Adj',
+                            compression = 'w')
+BMW = get.hist.quote(instrument = 'BMW.DE',
+                            start = start,
+                            end = end,
+                            quote = 'Adj',
+                            compression = 'w')
+BMW=na.omit(BMW)
+Volkswagen=na.omit(Volkswagen)
+```
+
+
+```{r}
+#unimos los valores 
+VOLK_BMW <- cbind( Volkswagen, BMW)
+```
+
+
+## Causal Impact Volkswagen
+
+Vamos a observar digfrentes medidas y gradficos para poder interpretar cueles fueron los efectos del impacto del acontecimiento "dieselgate" para Volkswagen:
+
+```{r}
+# estimamos el impacto para volkswagen
+impact_volk <- CausalImpact(data = VOLK_BMW,
+                       pre.period = pre_dieselgate,
+                       post.period = post_dieselgate)
+
+#vemos los resultados
+summary(impact_volk)
+
+
+```
+
+
+El modelo nos indica la media de la predicción en el periodo. La diiferencia entre la media y la predicción es el impacto. 
+En este caso observamos que este impacto es del -14%, es decir, las acciones de Volskwagen disminuyeron un 14% hasta el momento actual
+
+
+```{r}
+plot(impact_volk)
+```
+
+Es estos gráficos es facilmete identificable como los valores de las acciones de Volswagen disminuyeron desde la fecha del "dieselgate"
+
+
+
+```{r}
+plot(impact_volk, "original")
+```
+
+
+
+Este gráfico nos muestra la diferencia entre las predicciones d elaos valores de las acciones (línea discontinua), y los valores reales(lineas continuas). Se observa como en el momento de dieselgate los valores reales cayeron muy por debajo de los valores predecidos. es decir el dieselgate tuvo un efecto negativo para los valroes de las acciones de Volskwagen.
+
+
+
+```{r}
+summary(impact_volk, "report")
+```
+
+
+## Causal Impact BMW
+Vamos a observar digfrentes medidas y gradficos para poder interpretar cueles fueron los efectos del impacto del acontecimiento "dieselgate" para BMW. Aunque el escándolo estab relacionado con otra compaía vamos a estudiar si este hecho afecto a BMW
+
+```{r}
+# creamos los datos para ver los resulatdos de BMW
+BMW_VOLK <- cbind(BMW, Volkswagen)
+```
+
+
+
+
+```{r}
+# # estimamos el impacto para volkswagen
+impact_BMW <- CausalImpact(data = BMW_VOLK,
+                       pre.period = pre_dieselgate,
+                       post.period = post_dieselgate)
+#chequeamos los resultados
+summary(impact_BMW)
+
+
+```
+
+
+El modelo nos indica la media de la predicción en el periodo. La diiferencia entre la media y la predicción es el impacto. 
+En este caso observamos que este impacto es del 11%, quiere decir que el valor de los activos de VMW creción un 11% desde el dieselgate hasta el momento actual
+
+
+```{r}
+plot(impact_BMW)
+```
+
+
+Estos graficos nos muestran el comportamiento de los activos de BMW desde el breakpoint descrito, se representa graficamente ese aumento de 11% acomulado en el valor de las acciones.
+
+
+
+```{r}
+plot(impact_BMW, "original")
+```
+
+
+Analizado este gráfico se puede observar como los valores reales de los activos (línea continua) de BMW después del "dieselgate" fueron mayores que lo esperado (línea discontínua). Tras estos datos e interpretaciones podemos concluir que el Causal Impact de diesel gate tuvoun impactivo positivo para los activos de BMW
+
+
+
+```{r}
+summary(impact_BMW, "report")
+```
+
+
+## Conclusiones:
+
+El objetivo era estimar estudiar el efecto del DieselGate mediante el modelo CausalImpact. Las conclusiones nos llevan a que este hecho tuvo un efecto negativo en los valores de las acciones de la compañía involucrada directamente, Volskwagen, ya que disminuyeron sus valores. Y por el contrario, el acontecimiento se tradujo en un impacto positivo para una de las compañias de la competencia como puede ser BMW, ya que los valores de sus activos se incrementaron aa partir de este hecho.
