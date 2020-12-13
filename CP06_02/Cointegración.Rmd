@@ -1,0 +1,119 @@
+---
+title: "Cointegración"
+author: "Beatriz Cárdaba"
+date: "12/12/2020"
+output: html_document
+---
+
+
+### Utilizando datos diarios de los dos series desde el año 2014, debemos analizar la relación entre BMW y Volkswagen, contestando a las siguiente preguntas:
+
+#### ¿Están cointegradas?
+
+El objetivo es determinar si existe cointegración entre las series de los activos de BMV y Volkswagen desde 2014 hasta la actualidad.
+
+Las estimaciones de regresiones con variables no estacionarias son espurias salvo que estas estén cointegradas. Por es en primer lugar hay que realizar el test de Dickey-Fuller para saber si las series son o no estacionarias.
+
+
+__Librerías y datos__
+Se importan las librerías necesarias para este estudio y los datos. Éstos son obtenidos del portal Yahoo finances. Es importante crear el formato para que el programa pueda interpretarlo como una serie temporal.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+#Importamos las librerías
+library("quantmod") 
+library(forecast)
+library(tseries)
+library(dplyr)
+require(devtools)
+```
+
+```{r, include=FALSE}
+# importamos los valores de yahoofinance
+getSymbols('BMW.DE', from='2014-01-01', to='2020-12-10')
+getSymbols('VOW.DE', from='2014-01-01', to='2020-12-10')
+```
+
+```{r}
+sSymbol="BMW.DE"
+#get data from yahoo
+mData<-getSymbols(sSymbol ,from="2014-01-01",to="2020-12-10",auto.assign=FALSE)
+#Define workdata
+BMW_data=Ad(mData) # datos ajustados
+
+```
+
+```{r  }
+
+Volkwagen=getSymbols("VOW.DE",from="2014-01-01",to="2020-12-10",env=NULL)
+volk_data=Ad(mData)
+```
+
+__Test de Dickey Fuller__
+Es un test para conocer si las series son o no estacionarias. LA hipótesis nula indicará que la serie no es estacionario y por lo tanto sus valores medios no son constantes. 
+
+```{r}
+# test Dickey Fuller
+adf.test(na.omit(BMW_data[,1]),k=0)
+adf.test(na.omit(volk_data[,1]),k=0)
+
+```
+
+Dados los resultados del P-valor del test para ambas series, se determina que al ser > que 0.05 nos encontarmos en la zonda de aceptación de la H0 y por lo tanto ambas series son no estacionarias. Por lo tanto a continuación se van a tomar diferencias para hacer las series estacionarias.
+
+```{r}
+#Calculamos la primera diferencia para hacerlas estacionarias
+BMW.DE.ret <- diff(log(Ad(BMW.DE))) 
+VOW.DE.ret <- diff(log(Ad(VOW.DE)))
+```
+
+Una vez se ha generado la primera diferencaia se crea un vector con los valores de los rendimientos de ambas series y se comprueba si ahora ya son estacionarias:
+
+```{r}
+# unimos las series 
+BMW_VOLK = cbind(BMW.DE.ret,VOW.DE.ret) 
+colnames(BMW_VOLK) = c("BMW","VOW") 
+BMW_VOLK = na.omit(BMW_VOLK) #quitamos na
+plot(BMW_VOLK) # visualizamos los valores
+adf.test(BMW_VOLK$BMW) 
+adf.test(BMW_VOLK$VOW) 
+```
+
+Comprobamos que tras tomar la primera diferencia el p-valor del test de Dickey-Fuller es < 0.05 por lo que se rechaza la H0 y se asume que ahora las series son estacionarias.
+
+Ahora hay que comprobar si están cointegradas, para ello sus residuos deben ser estacionarios.
+
+Si los residuos son estacionarios las estimaciones de variables no estacionarias son superconsistentes.
+
+```{r}
+# creamos un modelo para estudair los resiuduos
+library(car)
+model_1 <- lm(BMW_VOLK$BMW ~ BMW_VOLK$VOW)
+summary(model_1)
+residuals <- model_1$residuals # observamos los residuos
+summary(residuals)
+residualPlot(model_1) # visualizamos los residuos
+```
+
+Comporbamos que los residuos se situan en torno a la media por lo que son estacionarios. Por lo tanto, las series están cointegradas.
+
+```{r}
+# test dickey fuller de los residuos para ver si son estacionarios
+adf.test(residuals) 
+library(urca) 
+test_1<-ur.df(residuals,type="tren",selectlags="AIC",lags=10) 
+summary(test_1)
+```
+Comprobamos mediante el test de Dickey-Fuller  que los errores son estacionarios ya que el p-valor es <0.05 por lo que las series sí están cointegradas.
+
+## Conclusiones:
+El objetivo propuesto era estudiar si las series tempoarales de los activos de estas empresas estaban cointegradas. Las series de BMW y de Volskwagen no eran estacionarios, ya que su media no era constante. Por la tanto es necesario que estén cointegrads para porder realizar estimaciones sobre ellas. Para que dos variable no estacionarias estén cointegradas los residuos deben ser estacionarios. 
+
+Para estudiar este hecho, tras comprobar que las variables no eran estacionarias, se ha tomado la primera diferencia de ambas, así se ha conseguido que fueran estacionaras.
+Después, hemos creado un modelo lienal que relacionaria ambas series para estudiar sus rendimientos. el test dickey fuller nos ha confirmado que los residuos de ambas series eran estacionarios por lo que están cointegradas.
